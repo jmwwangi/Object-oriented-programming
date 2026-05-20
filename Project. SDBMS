@@ -1,0 +1,393 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <memory> //creates smart pointers that handle memory automatically
+#include <utility> //allows for the unique pointers to be moved
+#include <limits>//allows for clearing of buffers
+#include <algorithm> // added to support sort() and transform() used in sorting and case-insensitive search
+using namespace std;
+
+// abstract class that will be useful for display of the student data
+class IPrintable {
+public:
+    virtual void display() const = 0;
+    virtual ~IPrintable() {} // handles memory leaks
+};
+
+// a subclass of the IPrintable class (inheritance)
+class Student : public IPrintable {
+    // encapsulation to hide sensitive data
+private:
+    // course and year were added as new fields to support search, sort, and filter by course enrollment and year
+    string name, password, registration_number, email, course, year;
+
+public:
+    int marks = 0;
+    string grade;
+    string inputed_name, inputed_password;
+
+    // setDetails now accepts course and year in addition to the original fields
+    void setDetails(string _name, string _password, string _reg_no,
+                    string _email, string _course, string _year) {
+        name = _name;
+        password = _password;
+        registration_number = _reg_no;
+        email = _email;
+        course = _course; // stores the student's course enrollment
+        year = _year;     // stores the student's year of study
+    }
+
+    // Getters
+    string getName()     const { return name; }
+    string getEmail()    const { return email; }
+    string getPassword() const { return password; }
+    string getReg_no()   const { return registration_number; }
+    string getCourse()   const { return course; }  // added to allow searching and filtering by course
+    string getYear()     const { return year; }    // added to allow sorting and filtering by year
+    string getGrade()    const { return grade; }   // added to allow sorting and filtering by grade
+
+    // implementing display() from IPrintable
+    // course and year are now included in the output
+    void display() const override {
+        cout << "Name: "    << name
+             << " | Reg: "     << registration_number
+             << " | Email: "   << email
+             << " | Course: "  << course  // new field displayed
+             << " | Year: "    << year    // new field displayed
+             << " | Grade: "   << (grade.empty() ? "N/A" : grade)
+             << endl;
+    }
+
+    // method that validates the user
+    bool validate_user() {
+        cout << "\nEnter name: ";
+        cin >> inputed_name;
+        cout << "Enter password: ";
+        cin >> inputed_password;
+        return (name == inputed_name && password == inputed_password);
+    }
+
+    // method that displays the results of individual users
+    void show_result() {
+        do {
+            cout << "Enter marks (0-100): ";
+            cin >> marks;
+            if (marks < 0 || marks > 100)
+                cout << "Invalid! Enter between 0 and 100.\n";
+        } while (marks < 0 || marks > 100);
+
+        if      (marks >= 80) grade = "A";
+        else if (marks >= 70) grade = "B";
+        else if (marks >= 60) grade = "C";
+        else if (marks >= 50) grade = "D";
+        else                  grade = "F";
+
+        cout << "Grade: " << grade << endl;
+    }
+
+    // method to update individual fields
+    // course and year update options were added to keep student records complete and editable
+    void editDetails() {
+        string input;
+        cout << "New name (enter to skip): ";
+        getline(cin, input);
+        if (!input.empty()) name = input;
+
+        cout << "New email (enter to skip): ";
+        getline(cin, input);
+        if (!input.empty()) email = input;
+
+        cout << "New password (enter to skip): ";
+        getline(cin, input);
+        if (!input.empty()) password = input;
+
+        // allows updating course enrollment
+        cout << "New course (enter to skip): ";
+        getline(cin, input);
+        if (!input.empty()) course = input;
+
+        // allows updating year of study
+        cout << "New year (enter to skip): ";
+        getline(cin, input);
+        if (!input.empty()) year = input;
+
+        cout << "Details updated!\n";
+    }
+};
+
+// class that stores students
+class Student_registry {
+    vector<unique_ptr<Student>> students;
+
+public:
+    // adding a new student
+    void addStudent(unique_ptr<Student> s) {
+        students.push_back(move(s));
+    }
+
+    // displaying all students
+    void displayAll() const {
+        if (students.empty()) { cout << "\nNo students registered.\n"; return; }
+        cout << "\n--- All Students ---\n";
+        for (const auto& s : students) s->display();
+    }
+
+    // displays a single student record looked up by registration number
+    // added to fulfill the requirement of displaying individual student records
+    void displayOne(const string& reg_no) const {
+        for (const auto& s : students) {
+            if (s->getReg_no() == reg_no) { s->display(); return; }
+        }
+        cout << "Student not found.\n";
+    }
+
+    // searches for students by name, registration number, or course enrollment
+    // added to fulfill the search requirement; comparison is case-insensitive for name and course
+    void search(const string& keyword) const {
+        bool found = false;
+        cout << "\n--- Search Results ---\n";
+        for (const auto& s : students) {
+            // convert name and keyword to lowercase for case-insensitive name matching
+            string nameLower = s->getName();
+            string kwLower = keyword;
+            transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+            transform(kwLower.begin(),   kwLower.end(),   kwLower.begin(),   ::tolower);
+
+            // convert course to lowercase for case-insensitive course matching
+            string courseLower = s->getCourse();
+            transform(courseLower.begin(), courseLower.end(), courseLower.begin(), ::tolower);
+
+            // match if keyword is found in name, matches reg number exactly, or is found in course
+            if (nameLower.find(kwLower)   != string::npos ||
+                s->getReg_no() == keyword ||
+                courseLower.find(kwLower) != string::npos) {
+                s->display();
+                found = true;
+            }
+        }
+        if (!found) cout << "No matching students found.\n";
+    }
+
+    // editing a student by reg number
+    void editStudent(const string& reg_no) {
+        for (auto& s : students) {
+            if (s->getReg_no() == reg_no) { s->editDetails(); return; }
+        }
+        cout << "Student not found.\n";
+    }
+
+    // removing a student by reg number
+    void removeStudent(const string& reg_no) {
+        for (auto it = students.begin(); it != students.end(); ++it) {
+            if ((*it)->getReg_no() == reg_no) {
+                students.erase(it); // removes and frees memory
+                cout << "Student removed.\n";
+                return;
+            }
+        }
+        cout << "Student not found.\n";
+    }
+
+    // sorts or filters the student list by name, grade, or year
+    // added to fulfill the sort and filter requirement
+    void sortAndFilter() {
+        if (students.empty()) { cout << "\nNo students registered.\n"; return; }
+
+        cout << "\n--- Sort / Filter ---\n";
+        cout << "1. Sort by Name\n";
+        cout << "2. Sort by Grade\n";
+        cout << "3. Sort by Year\n";
+        cout << "4. Filter by Grade\n";
+        cout << "5. Filter by Year\n";
+        cout << "Choice: ";
+
+        int choice;
+        if (!(cin >> choice)) { cin.clear(); cin.ignore(1000, '\n'); return; }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+        // build a temporary list of raw pointers to sort without moving ownership
+        vector<Student*> list;
+        for (const auto& s : students) list.push_back(s.get());
+
+        if (choice == 1) {
+            // sort alphabetically by name using a lambda comparator
+            sort(list.begin(), list.end(), [](Student* a, Student* b){
+                return a->getName() < b->getName();
+            });
+            cout << "\n--- Sorted by Name ---\n";
+            for (auto s : list) s->display();
+
+        } else if (choice == 2) {
+            // sort alphabetically by grade (A comes before B, etc.)
+            sort(list.begin(), list.end(), [](Student* a, Student* b){
+                return a->getGrade() < b->getGrade();
+            });
+            cout << "\n--- Sorted by Grade ---\n";
+            for (auto s : list) s->display();
+
+        } else if (choice == 3) {
+            // sort alphabetically by year (e.g. Year1 before Year2)
+            sort(list.begin(), list.end(), [](Student* a, Student* b){
+                return a->getYear() < b->getYear();
+            });
+            cout << "\n--- Sorted by Year ---\n";
+            for (auto s : list) s->display();
+
+        } else if (choice == 4) {
+            // filter to show only students with a specific grade
+            string g;
+            cout << "Enter grade to filter (A/B/C/D/F): ";
+            cin >> g; cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            bool found = false;
+            cout << "\n--- Students with Grade " << g << " ---\n";
+            for (auto s : list) {
+                if (s->getGrade() == g) { s->display(); found = true; }
+            }
+            if (!found) cout << "No students with that grade.\n";
+
+        } else if (choice == 5) {
+            // filter to show only students in a specific year
+            string y;
+            cout << "Enter year to filter (e.g. Year1): ";
+            cin >> y; cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            bool found = false;
+            cout << "\n--- Students in " << y << " ---\n";
+            for (auto s : list) {
+                if (s->getYear() == y) { s->display(); found = true; }
+            }
+            if (!found) cout << "No students in that year.\n";
+        } else {
+            cout << "Invalid choice.\n";
+        }
+    }
+
+    // find by reg number, returns raw pointer or nullptr
+    Student* findByReg(const string& reg_no) {
+        for (const auto& s : students)
+            if (s->getReg_no() == reg_no) return s.get();
+        return nullptr;
+    }
+};
+
+// helper function to create and register a student with all fields including course and year
+void seedStudent(Student_registry& registry,
+                 const string& name, const string& pass,
+                 const string& reg,  const string& email,
+                 const string& course, const string& year) {
+    auto s = make_unique<Student>();
+    s->setDetails(name, pass, reg, email, course, year);
+    registry.addStudent(move(s));
+}
+
+int main() {
+    Student_registry registry;
+
+    // pre-loaded students with course and year fields populated
+    seedStudent(registry, "Alice",   "alice123",   "REG001", "alice@university.edu",   "Computer Science", "Year1");
+    seedStudent(registry, "Bob",     "bob456",     "REG002", "bob@university.edu",     "Engineering",      "Year2");
+    seedStudent(registry, "Charlie", "charlie789", "REG003", "charlie@university.edu", "Business",         "Year3");
+
+    int choice;
+
+    do {
+        cout << "\n=== Student Management System ===\n";
+        cout << "1. Add Student\n";
+        cout << "2. Display All Students\n";
+        cout << "3. Display Individual Student\n";  // new option to display a single student record
+        cout << "4. Search Students\n";             // new option to search by name, ID, or course
+        cout << "5. Edit Student\n";
+        cout << "6. Remove Student\n";
+        cout << "7. Sort / Filter Students\n";      // new option to sort or filter by grade, name, or year
+        cout << "8. Login as Student\n";
+        cout << "0. Exit\n";
+        cout << "Choice: ";
+
+        if (!(cin >> choice)) {
+            cin.clear();
+            cin.ignore(1000, '\n');
+            cout << "Invalid input.\n";
+            choice = -1;
+            continue;
+        }
+        cin.ignore(numeric_limits<streamsize>::max(), '\n'); // clear leftover newline after reading choice
+
+        if (choice == 1) {
+            string name, pass, reg, email, course, year;
+            cout << "Name: ";     cin >> name;
+            cout << "Password: "; cin >> pass;
+            cout << "Reg No: ";   cin >> reg;
+            cout << "Email: ";    cin >> email;
+            cout << "Course: ";   cin.ignore(); getline(cin, course); // getline used to allow spaces in course name
+            cout << "Year: ";     getline(cin, year);
+
+            auto s = make_unique<Student>();
+            s->setDetails(name, pass, reg, email, course, year);
+            registry.addStudent(move(s));
+            cout << "Student added!\n";
+
+        } else if (choice == 2) {
+            registry.displayAll();
+
+        } else if (choice == 3) {
+            // new: look up and display a single student by registration number
+            string reg;
+            cout << "Enter reg number: ";
+            cin >> reg;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            registry.displayOne(reg);
+
+        } else if (choice == 4) {
+            // new: search across name, registration number, and course enrollment
+            string keyword;
+            cout << "Enter name, reg number, or course to search: ";
+            getline(cin, keyword);
+            registry.search(keyword);
+
+        } else if (choice == 5) {
+            string reg;
+            cout << "Enter reg number to edit: ";
+            cin >> reg;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            registry.editStudent(reg);
+
+        } else if (choice == 6) {
+            string reg;
+            cout << "Enter reg number to remove: ";
+            cin >> reg;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            registry.removeStudent(reg);
+
+        } else if (choice == 7) {
+            // new: sort or filter the student list by name, grade, or year
+            registry.sortAndFilter();
+
+        } else if (choice == 8) {
+            string reg;
+            cout << "Enter your reg number: ";
+            cin >> reg;
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+            Student* s = registry.findByReg(reg);
+            if (!s) { cout << "Student not found.\n"; continue; }
+
+            int attempts = 0;
+            while (attempts < 3) {
+                if (s->validate_user()) {
+                    cout << "Access granted!\n";
+                    s->show_result();
+                    break;
+                } else {
+                    attempts++;
+                    int remaining = 3 - attempts;
+                    if (remaining > 0)
+                        cout << "Wrong credentials. " << remaining << " attempt(s) left.\n";
+                    else
+                        cout << "Too many attempts! Account locked.\n";
+                }
+            }
+        }
+
+    } while (choice != 0);
+
+    return 0;
+}
